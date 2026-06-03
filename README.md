@@ -31,6 +31,10 @@ ___
 
 ```
 parking_app/
+├── .github/                      # GitHub конфигурации
+│   └── workflows/                # GitHub Actions
+│       └── lint.yml              # CI/CD пайплайн (линтеры и тесты)
+│
 ├── app/                          # Основной код приложения
 │   ├── __init__.py               # Фабрика приложения
 │   ├── config.py                 # Конфигурация
@@ -58,17 +62,18 @@ parking_app/
 │   └── test_factories.py
 │
 ├── instance/                     # База данных (создается автоматически)
-│   └── parking.db                # SQLite база данных
+│   └── parking.db                # SQLite база данных (игнорируется)
 │
 ├── .venv/                        # Виртуальное окружение (игнорируется)
 │
-├── .gitignore                    # Git игнорируемые файлы
-├── .gitlab-ci.yml                # GitLab CI/CD конфигурация
 ├── .flake8                       # Flake8 конфигурация
-├── pyproject.toml                # Black, Isort, Mypy конфигурация
+├── .gitignore                    # Git игнорируемые файлы
+├── .gitlab-ci.yml                # GitLab CI/CD (если нужен)
 ├── .pre-commit-config.yaml       # Pre-commit хуки
-├── requirements.txt              # Зависимости проекта
+│
+├── pyproject.toml                # Black, Isort, Mypy конфигурация
 ├── pytest.ini                    # Настройки pytest
+├── requirements.txt              # Зависимости проекта
 ├── main.py                       # Точка входа
 └── README.md                     # Документация проекта
 ```
