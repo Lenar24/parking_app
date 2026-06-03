@@ -1,0 +1,37 @@
+name: Lint Python Code
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black==24.10.0 isort==5.13.2 flake8==7.3.0 mypy==1.13.0 types-SQLAlchemy
+
+    - name: Run Black
+      run: black --check .
+
+    - name: Run isort
+      run: isort --check-only .  # автоматически читает pyproject.toml
+
+    - name: Run flake8
+      run: flake8 .  # автоматически читает .flake8
+
+    - name: Run mypy
+      run: mypy . --ignore-missing-imports  # читает pyproject.toml
