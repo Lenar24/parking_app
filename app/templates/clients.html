@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Клиенты{% endblock %}
+
+{% block content %}
+<h2>👥 Управление клиентами</h2>
+
+<div class="card">
+    <h3>➕ Добавить нового клиента</h3>
+    <form id="addClientForm">
+        <div class="form-group">
+            <label>Имя *</label>
+            <input type="text" id="name" required>
+        </div>
+        <div class="form-group">
+            <label>Фамилия *</label>
+            <input type="text" id="surname" required>
+        </div>
+        <div class="form-group">
+            <label>Номер карты</label>
+            <input type="text" id="credit_card" placeholder="XXXX-XXXX-XXXX-XXXX">
+        </div>
+        <div class="form-group">
+            <label>Номер автомобиля</label>
+            <input type="text" id="car_number" placeholder="A123BC77">
+        </div>
+        <button type="submit">➕ Добавить клиента</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>📋 Список клиентов</h3>
+    <div style="overflow-x: auto;">
+        <table id="clientsTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Имя</th>
+                    <th>Фамилия</th>
+                    <th>Номер авто</th>
+                    <th>Карта</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody id="clientsList">
+                <tr>
+                    <td colspan="6" style="text-align: center;">Загрузка...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    async function loadClients() {
+        try {
+            const response = await apiRequest('/api/clients', 'GET');
+            const clients = response.data || response;
+
+            const tbody = document.getElementById('clientsList');
+
+            if (!clients || clients.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Нет клиентов</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+
+            clients.forEach(client => {
+                const row = tbody.insertRow();
+                row.insertCell(0).textContent = client.id;
+                row.insertCell(1).textContent = client.name;
+                row.insertCell(2).textContent = client.surname;
+                row.insertCell(3).textContent = client.car_number || '-';
+                row.insertCell(4).textContent = client.credit_card ? '✓ Есть' : '✗ Нет';
+
+                const actions = row.insertCell(5);
+
+                // Кнопка "История" - исправлено: правильно передаем ID
+                const historyBtn = document.createElement('button');
+                historyBtn.textContent = '📜 История';
+                historyBtn.style.marginRight = '5px';
+                historyBtn.style.padding = '5px 10px';
+                historyBtn.style.fontSize = '12px';
+                historyBtn.style.cursor = 'pointer';
+                historyBtn.onclick = () => {
+                    window.location.href = `/history?client_id=${client.id}`;
+                };
+                actions.appendChild(historyBtn);
+
+                // Опционально: кнопка "Редактировать"
+                const editBtn = document.createElement('button');
+                editBtn.textContent = '✏️';
+                editBtn.style.padding = '5px 10px';
+                editBtn.style.fontSize = '12px';
+                editBtn.style.cursor = 'pointer';
+                editBtn.onclick = () => {
+                    showMessage('Редактирование клиента будет доступно в следующей версии', 'info');
+                };
+                // actions.appendChild(editBtn); // Раскомментировать если нужно
+            });
+        } catch (error) {
+            console.error('Error loading clients:', error);
+            const tbody = document.getElementById('clientsList');
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Ошибка загрузки клиентов</td></tr>';
+        }
+    }
+
+    document.getElementById('addClientForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const clientData = {
+            name: document.getElementById('name').value,
+            surname: document.getElementById('surname').value,
+            credit_card: document.getElementById('credit_card').value || null,
+            car_number: document.getElementById('car_number').value || null
+        };
+
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Добавление...';
+        submitBtn.disabled = true;
+
+        try {
+            await apiRequest('/api/clients', 'POST', clientData);
+            showMessage('Клиент успешно добавлен!', 'success');
+            document.getElementById('addClientForm').reset();
+            await loadClients();
+        } catch (error) {
+            console.error('Error:', error);
+            showMessage(error.message || 'Ошибка при добавлении клиента', 'error');
+        } finally {
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadClients();
+    });
+</script>
+{% endblock %}

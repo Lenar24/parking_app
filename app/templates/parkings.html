@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Парковки{% endblock %}
+
+{% block content %}
+<h2>🅿️ Управление парковками</h2>
+
+<div class="card">
+    <h3>➕ Добавить новую парковку</h3>
+    <form id="addParkingForm">
+        <div class="form-group">
+            <label>Адрес *</label>
+            <input type="text" id="address" required>
+        </div>
+        <div class="form-group">
+            <label>Количество мест *</label>
+            <input type="number" id="count_places" required min="1">
+        </div>
+        <div class="form-group">
+            <label>Статус</label>
+            <select id="opened">
+                <option value="true">Открыта</option>
+                <option value="false">Закрыта</option>
+            </select>
+        </div>
+        <button type="submit">➕ Добавить парковку</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>📋 Список парковок</h3>
+    <div style="overflow-x: auto;">
+        <table id="parkingsTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Адрес</th>
+                    <th>Всего мест</th>
+                    <th>Свободно</th>
+                    <th>Загруженность</th>
+                    <th>Статус</th>
+                </tr>
+            </thead>
+            <tbody id="parkingsList">
+                <tr>
+                    <td colspan="6" style="text-align: center;">Загрузка...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    async function loadParkings() {
+        try {
+            const response = await apiRequest('/api/parkings', 'GET');
+            // Исправлено: правильно извлекаем массив парковок
+            const parkings = response.data || response;
+
+            const tbody = document.getElementById('parkingsList');
+
+            if (!parkings || parkings.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Нет парковок</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+
+            parkings.forEach(parking => {
+                // Защита от деления на ноль
+                const occupancy = parking.count_places > 0
+                    ? ((1 - parking.count_available_places / parking.count_places) * 100).toFixed(1)
+                    : 0;
+
+                const row = tbody.insertRow();
+                row.insertCell(0).textContent = parking.id;
+                row.insertCell(1).textContent = parking.address;
+                row.insertCell(2).textContent = parking.count_places;
+                row.insertCell(3).textContent = parking.count_available_places;
+                row.insertCell(4).textContent = `${occupancy}%`;
+
+                // Создаем ячейку статуса с цветом
+                const statusCell = row.insertCell(5);
+                const statusText = parking.opened ? '🟢 Открыта' : '🔴 Закрыта';
+                const statusColor = parking.opened ? '#28a745' : '#dc3545';
+                statusCell.innerHTML = `<span style="color: ${statusColor}; font-weight: bold;">${statusText}</span>`;
+            });
+        } catch (error) {
+            console.error('Error loading parkings:', error);
+            const tbody = document.getElementById('parkingsList');
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Ошибка загрузки парковок</td></tr>';
+        }
+    }
+
+    document.getElementById('addParkingForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const parkingData = {
+            address: document.getElementById('address').value,
+            count_places: parseInt(document.getElementById('count_places').value),
+            opened: document.getElementById('opened').value === 'true'
+        };
+
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Добавление...';
+        submitBtn.disabled = true;
+
+        try {
+            await apiRequest('/api/parkings', 'POST', parkingData);
+            showMessage('Парковка успешно добавлена!', 'success');
+            document.getElementById('addParkingForm').reset();
+            await loadParkings(); // Перезагружаем список
+        } catch (error) {
+            console.error('Error:', error);
+            showMessage(error.message || 'Ошибка при добавлении парковки', 'error');
+        } finally {
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+
+    // Загружаем парковки при загрузке страницы
+    document.addEventListener('DOMContentLoaded', () => {
+        loadParkings();
+    });
+</script>
+{% endblock %}

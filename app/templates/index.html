@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Парковочный сервис{% endblock %}
+
+{% block content %}
+<h2>Добро пожаловать в систему управления парковкой</h2>
+
+<div class="stats" id="stats">
+    <div class="stat-card">
+        <h3>Всего клиентов</h3>
+        <div class="number" id="totalClients">0</div>
+    </div>
+    <div class="stat-card">
+        <h3>Всего парковок</h3>
+        <div class="number" id="totalParkings">0</div>
+    </div>
+    <div class="stat-card">
+        <h3>Активных сессий</h3>
+        <div class="number" id="activeSessions">0</div>
+    </div>
+    <div class="stat-card">
+        <h3>Свободных мест</h3>
+        <div class="number" id="freeSpaces">0</div>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Быстрые действия</h3>
+    <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+        <button onclick="window.location.href='/clients'">➕ Добавить клиента</button>
+        <button onclick="window.location.href='/parkings'">🅿️ Добавить парковку</button>
+        <button onclick="window.location.href='/operations'">🚘 Заезд/Выезд</button>
+    </div>
+</div>
+
+<script>
+    async function loadStats() {
+        try {
+            // Получаем данные
+            const clients = await apiRequest('/api/clients', 'GET');
+            const parkings = await apiRequest('/api/parkings', 'GET');
+            const active = await apiRequest('/api/client_parkings/active', 'GET');
+
+            // Извлекаем массивы (поддерживает оба формата ответа)
+            const clientsList = clients.data || clients;
+            const parkingsList = parkings.data || parkings;
+            const activeList = active.data || active;
+
+            // Обновляем отображение
+            document.getElementById('totalClients').textContent = clientsList.length || 0;
+            document.getElementById('totalParkings').textContent = parkingsList.length || 0;
+            document.getElementById('activeSessions').textContent = activeList.length || 0;
+
+            // Считаем свободные места
+            let freeSpaces = 0;
+            if (Array.isArray(parkingsList)) {
+                freeSpaces = parkingsList.reduce((sum, p) => sum + (p.count_available_places || 0), 0);
+            }
+            document.getElementById('freeSpaces').textContent = freeSpaces;
+
+        } catch (error) {
+            console.error('Error loading stats:', error);
+        }
+    }
+
+    // Загружаем статистику при загрузке страницы
+    document.addEventListener('DOMContentLoaded', loadStats);
+</script>
+{% endblock %}

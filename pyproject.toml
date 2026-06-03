@@ -1,0 +1,32 @@
+[tool.black]
+line-length = 88
+target-version = ['py313']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+allow_untyped_defs = true
+check_untyped_defs = false
+warn_return_any = false
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = "app.models"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "flask_sqlalchemy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "sqlalchemy.*"
+ignore_missing_imports = true

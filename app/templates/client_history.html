@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}История парковок{% endblock %}
+
+{% block content %}
+<h2>📜 История парковок клиента</h2>
+
+<div class="card">
+    <div class="form-group">
+        <label>Выберите клиента</label>
+        <select id="clientSelect">
+            <option value="">Выберите клиента</option>
+        </select>
+    </div>
+</div>
+
+<div id="historyContainer" style="display: none;">
+    <div class="card">
+        <h3>Информация о клиенте</h3>
+        <div id="clientInfo"></div>
+    </div>
+
+    <div class="card">
+        <h3>История парковок</h3>
+        <div id="statsContainer" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;"></div>
+        <div style="overflow-x: auto;">
+            <table id="historyTable">
+                <thead>
+                    <tr>
+                        <th>Парковка</th>
+                        <th>Время заезда</th>
+                        <th>Время выезда</th>
+                        <th>Длительность</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody id="historyList">
+                    <tr><td colspan="5" style="text-align: center;">Выберите клиента</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Получение параметров из URL
+    function getUrlParameter(name) {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get(name);
+    }
+
+    async function loadClients() {
+        try {
+            const response = await apiRequest('/api/clients', 'GET');
+            const clients = response.data || response;
+            const select = document.getElementById('clientSelect');
+
+            select.innerHTML = '<option value="">Выберите клиента</option>';
+
+            if (!clients || clients.length === 0) {
+                console.warn('Нет клиентов');
+                return;
+            }
+
+            clients.forEach(client => {
+                const option = document.createElement('option');
+                option.value = client.id;
+                option.textContent = `${client.name} ${client.surname}`;
+                select.appendChild(option);
+            });
+
+            // Проверяем, есть ли параметр client_id в URL
+            const clientIdFromUrl = getUrlParameter('client_id');
+            if (clientIdFromUrl) {
+                select.value = clientIdFromUrl;
+                loadClientHistory(parseInt(clientIdFromUrl));
+            }
+
+            console.log(`Загружено ${clients.length} клиентов`);
+        } catch (error) {
+            console.error('Error loading clients:', error);
+            showMessage('Ошибка загрузки списка клиентов', 'error');
+        }
+    }
+
+    async function loadClientHistory(clientId) {
+        if (!clientId) return;
+
+        try {
+            const response = await apiRequest(`/api/client_parkings/client/${clientId}`, 'GET');
+            const data = response;
+            const client = data.client;
+            const history = data.history || [];
+
+            document.getElementById('clientInfo').innerHTML = `
+                <p><strong>Имя:</strong> ${client.name} ${client.surname}</p>
+                <p><strong>Номер авто:</strong> ${client.car_number || 'не указан'}</p>
+                <p><strong>Карта:</strong> ${client.credit_card ? '✓ Привязана' : '✗ Не привязана'}</p>
+                <p><strong>Всего парковок:</strong> ${history.length}</p>
+            `;
+
+            const completedCount = history.filter(h => h.time_out).length;
+            const activeCount = history.filter(h => !h.time_out).length;
+            const totalCost = history.reduce((sum, h) => {
+                if (h.time_out && h.parking_duration) {
+                    return sum + (h.parking_duration * 2);
+                }
+                return sum;
+            }, 0);
+
+            document.getElementById('statsContainer').innerHTML = `
+                <div class="stat-card">
+                    <h3>✅ Завершено</h3>
+                    <div class="number">${completedCount}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>🟢 Активных</h3>
+                    <div class="number">${activeCount}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>💰 Всего потрачено</h3>
+                    <div class="number">${totalCost.toFixed(2)} ₽</div>
+                </div>
+            `;
+
+            const tbody = document.getElementById('historyList');
+
+            if (!history || history.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Нет истории парковок</td></tr>';
+                document.getElementById('historyContainer').style.display = 'block';
+                return;
+            }
+
+            tbody.innerHTML = '';
+
+            for (const session of history) {
+                try {
+                    const parkingResponse = await apiRequest(`/api/parkings/${session.parking_id}`, 'GET');
+                    const parking = parkingResponse.data || parkingResponse;
+
+                    const row = tbody.insertRow();
+                    row.insertCell(0).textContent = parking.address || `Парковка #${session.parking_id}`;
+                    row.insertCell(1).textContent = session.time_in ? new Date(session.time_in).toLocaleString() : '-';
+                    row.insertCell(2).textContent = session.time_out ? new Date(session.time_out).toLocaleString() : 'в процессе';
+
+                    const duration = session.parking_duration;
+                    row.insertCell(3).textContent = duration ? `${duration.toFixed(1)} мин` : '-';
+
+                    const status = session.time_out ? '✅ Завершена' : '🟢 Активна';
+                    const statusColor = session.time_out ? '#28a745' : '#ffc107';
+                    row.insertCell(4).innerHTML = `<span style="color: ${statusColor}; font-weight: bold;">${status}</span>`;
+                } catch (err) {
+                    console.error('Error loading parking info:', err);
+                    const row = tbody.insertRow();
+                    row.insertCell(0).textContent = `Парковка #${session.parking_id}`;
+                    row.insertCell(1).textContent = session.time_in ? new Date(session.time_in).toLocaleString() : '-';
+                    row.insertCell(2).textContent = session.time_out ? new Date(session.time_out).toLocaleString() : 'в процессе';
+                    row.insertCell(3).textContent = session.parking_duration ? `${session.parking_duration} мин` : '-';
+                    row.insertCell(4).textContent = session.time_out ? '✅ Завершена' : '🟢 Активна';
+                }
+            }
+
+            document.getElementById('historyContainer').style.display = 'block';
+        } catch (error) {
+            console.error('Error loading history:', error);
+            showMessage('Ошибка загрузки истории', 'error');
+        }
+    }
+
+    document.getElementById('clientSelect').addEventListener('change', (e) => {
+        const clientId = e.target.value;
+        if (clientId) {
+            loadClientHistory(parseInt(clientId));
+            // Обновляем URL без перезагрузки страницы
+            const url = new URL(window.location);
+            url.searchParams.set('client_id', clientId);
+            window.history.pushState({}, '', url);
+        } else {
+            document.getElementById('historyContainer').style.display = 'none';
+            document.getElementById('historyList').innerHTML = '<tr><td colspan="5" style="text-align: center;">Выберите клиента</td></tr>';
+            // Удаляем параметр из URL
+            const url = new URL(window.location);
+            url.searchParams.delete('client_id');
+            window.history.pushState({}, '', url);
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadClients();
+    });
+</script>
+{% endblock %}

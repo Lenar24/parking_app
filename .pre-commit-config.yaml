@@ -1,0 +1,52 @@
+# .pre-commit-config.yaml
+
+repos:
+  # Основной репозиторий с хуками для общих задач
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0  # Версия набора хуков
+    hooks:
+      - id: trailing-whitespace  # Удаляет лишние пробелы в конце строк
+      - id: end-of-file-fixer    # Добавляет пустую строку в конце файла
+      - id: check-yaml           # Проверяет синтаксис YAML файлов
+      - id: check-added-large-files # Не дает закоммитить гигантские файлы
+        args: ['--maxkb=500']
+
+  # Хук для форматирования кода Black
+  - repo: https://github.com/psf/black
+    rev: 24.10.0  # Укажите вашу версию black
+    hooks:
+      - id: black
+        language_version: python3.13
+
+  # Хук для сортировки импортов Isort (с профилем black!)
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2  # Укажите вашу версию isort
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]
+
+  # Хук для линтинга Flake8
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.3.0   # Укажите вашу версию flake8
+    hooks:
+      - id: flake8
+        additional_dependencies: [
+            'flake8-bugbear==25.11.29',
+            'flake8-pie==0.16.0',
+        ]
+        args: ["--max-line-length=88"]
+
+  # Хук для проверки типов MyPy
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        # Добавьте сюда все ваши "types-*" зависимости
+        additional_dependencies: [
+            'types-SQLAlchemy==1.4.53.38',
+            'types-click==7.1.8',
+            'types-Flask==1.1.6',
+        ]
+        args: ["--ignore-missing-imports"]
+        # Исключаем тесты из строгой проверки типов
+        exclude: ^tests/

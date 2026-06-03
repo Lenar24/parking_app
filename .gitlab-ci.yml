@@ -1,0 +1,92 @@
+# .gitlab-ci.yml для GitLab 19.x
+
+stages:
+  - lint
+  - test
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PYTHON_VERSION: "3.13"
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .cache/pip
+    - .venv/
+
+# Базовый шаблон
+.base:
+  image: python:${PYTHON_VERSION}-slim
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends build-essential
+    - python -V
+    - pip install --upgrade pip
+  interruptible: true
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+
+# Линтеры (параллельное выполнение)
+black:
+  extends: .base
+  stage: lint
+  script:
+    - pip install black==24.10.0
+    - black --check --diff .
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+isort:
+  extends: .base
+  stage: lint
+  script:
+    - pip install isort==5.13.2
+    - isort --check-only --diff --profile black .
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+flake8:
+  extends: .base
+  stage: lint
+  script:
+    - pip install flake8==7.3.0 flake8-bugbear==25.11.29 flake8-pie==0.16.0
+    # Явно указываем max-line-length=88 (будет использован .flake8 если есть)
+    - flake8 . --max-line-length=88
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+mypy:
+  extends: .base
+  stage: lint
+  script:
+    - pip install mypy==1.13.0 types-SQLAlchemy==1.4.53.38 types-click==7.1.8 types-Flask==1.1.6
+    - mypy . --ignore-missing-imports
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Запуск тестов
+pytest:
+  extends: .base
+  stage: test
+  script:
+    - pip install -r requirements.txt
+    - pip install pytest==7.4.3 pytest-cov==4.1.0
+    - pytest --cov=. --cov-report=term --cov-report=html --cov-report=xml -v
+  artifacts:
+    when: always
+    paths:
+      - coverage/
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+  coverage: '/TOTAL.*\s+(\d+%)/'
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block title %}Операции парковки{% endblock %}
+
+{% block content %}
+<h2>🚘 Заезд и выезд с парковки</h2>
+
+<div class="stats" id="stats">
+    <div class="stat-card">
+        <h3>Активных сессий</h3>
+        <div class="number" id="activeCount">0</div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <div class="card">
+        <h3>🚗 Заезд на парковку</h3>
+        <form id="checkInForm">
+            <div class="form-group">
+                <label>Клиент</label>
+                <select id="checkin_client_id" required>
+                    <option value="">Выберите клиента</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Парковка</label>
+                <select id="checkin_parking_id" required>
+                    <option value="">Выберите парковку</option>
+                </select>
+            </div>
+            <button type="submit">🚘 Заехать</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>🏁 Выезд с парковки</h3>
+        <form id="checkOutForm">
+            <div class="form-group">
+                <label>Клиент</label>
+                <select id="checkout_client_id" required>
+                    <option value="">Выберите клиента</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Парковка</label>
+                <select id="checkout_parking_id" required>
+                    <option value="">Выберите парковку</option>
+                </select>
+            </div>
+            <button type="submit">🏁 Выехать</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <h3>📊 Активные сессии</h3>
+    <div style="overflow-x: auto;">
+        <table id="activeSessionsTable">
+            <thead>
+                <tr>
+                    <th>Клиент</th>
+                    <th>Парковка</th>
+                    <th>Время заезда</th>
+                    <th>Длительность</th>
+                </tr>
+            </thead>
+            <tbody id="activeSessionsList">
+                <tr><td colspan="4" style="text-align: center;">Загрузка...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // Загрузка списков клиентов и парковок
+    async function loadSelects() {
+        try {
+            // Получаем клиентов
+            const clientsResponse = await apiRequest('/api/clients', 'GET');
+            const clients = clientsResponse.data || clientsResponse;
+
+            // Получаем парковки
+            const parkingsResponse = await apiRequest('/api/parkings', 'GET');
+            const parkings = parkingsResponse.data || parkingsResponse;
+
+            // Очищаем и заполняем select для заезда
+            const selectCheckinClient = document.getElementById('checkin_client_id');
+            const selectCheckoutClient = document.getElementById('checkout_client_id');
+            const selectCheckinParking = document.getElementById('checkin_parking_id');
+            const selectCheckoutParking = document.getElementById('checkout_parking_id');
+
+            // Очищаем (оставляем только первый option)
+            selectCheckinClient.innerHTML = '<option value="">Выберите клиента</option>';
+            selectCheckoutClient.innerHTML = '<option value="">Выберите клиента</option>';
+            selectCheckinParking.innerHTML = '<option value="">Выберите парковку</option>';
+            selectCheckoutParking.innerHTML = '<option value="">Выберите парковку</option>';
+
+            // Заполняем клиентами
+            if (clients && Array.isArray(clients)) {
+                clients.forEach(client => {
+                    const option1 = document.createElement('option');
+                    option1.value = client.id;
+                    option1.textContent = `${client.name} ${client.surname}`;
+                    selectCheckinClient.appendChild(option1);
+
+                    const option2 = document.createElement('option');
+                    option2.value = client.id;
+                    option2.textContent = `${client.name} ${client.surname}`;
+                    selectCheckoutClient.appendChild(option2);
+                });
+            }
+
+            // Заполняем парковками
+            if (parkings && Array.isArray(parkings)) {
+                parkings.forEach(parking => {
+                    const option1 = document.createElement('option');
+                    option1.value = parking.id;
+                    option1.textContent = `${parking.address} (свободно: ${parking.count_available_places})`;
+                    selectCheckinParking.appendChild(option1);
+
+                    const option2 = document.createElement('option');
+                    option2.value = parking.id;
+                    option2.textContent = parking.address;
+                    selectCheckoutParking.appendChild(option2);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading selects:', error);
+            showMessage('Ошибка загрузки данных', 'error');
+        }
+    }
+
+    // Загрузка активных сессий
+    async function loadActiveSessions() {
+        try {
+            const response = await apiRequest('/api/client_parkings/active', 'GET');
+            const sessions = response.data || response;
+
+            const tbody = document.getElementById('activeSessionsList');
+
+            if (!sessions || sessions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Нет активных сессий</td></tr>';
+                document.getElementById('activeCount').textContent = '0';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            document.getElementById('activeCount').textContent = sessions.length;
+
+            for (const session of sessions) {
+                try {
+                    // Получаем данные клиента
+                    const clientResponse = await apiRequest(`/api/clients/${session.client_id}`, 'GET');
+                    const client = clientResponse.data || clientResponse;
+
+                    // Получаем данные парковки
+                    const parkingResponse = await apiRequest(`/api/parkings/${session.parking_id}`, 'GET');
+                    const parking = parkingResponse.data || parkingResponse;
+
+                    const row = tbody.insertRow();
+                    row.insertCell(0).textContent = `${client.name} ${client.surname}`;
+                    row.insertCell(1).textContent = parking.address;
+                    row.insertCell(2).textContent = session.time_in ? new Date(session.time_in).toLocaleString() : '-';
+
+                    // Рассчитываем длительность
+                    let duration = session.parking_duration;
+                    if (!duration && session.time_in) {
+                        const timeIn = new Date(session.time_in);
+                        const now = new Date();
+                        duration = Math.floor((now - timeIn) / 1000 / 60);
+                    }
+                    row.insertCell(3).textContent = duration ? `${duration} мин` : '0 мин';
+                } catch (err) {
+                    console.error('Error loading session details:', err);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading active sessions:', error);
+            const tbody = document.getElementById('activeSessionsList');
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: red;">Ошибка загрузки сессий</td></tr>';
+        }
+    }
+
+    // Заезд на парковку
+    document.getElementById('checkInForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const clientId = document.getElementById('checkin_client_id').value;
+        const parkingId = document.getElementById('checkin_parking_id').value;
+
+        if (!clientId || !parkingId) {
+            showMessage('Выберите клиента и парковку', 'error');
+            return;
+        }
+
+        const data = {
+            client_id: parseInt(clientId),
+            parking_id: parseInt(parkingId)
+        };
+
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Оформление...';
+        submitBtn.disabled = true;
+
+        try {
+            await apiRequest('/api/client_parkings', 'POST', data);
+            showMessage('✅ Заезд оформлен!', 'success');
+
+            // Очищаем форму
+            document.getElementById('checkin_client_id').value = '';
+            document.getElementById('checkin_parking_id').value = '';
+
+            // Обновляем данные
+            await loadActiveSessions();
+            await loadSelects();
+        } catch (error) {
+            console.error('Error:', error);
+            showMessage(error.message || 'Ошибка при заезде', 'error');
+        } finally {
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+
+    // Выезд с парковки
+    document.getElementById('checkOutForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const clientId = document.getElementById('checkout_client_id').value;
+        const parkingId = document.getElementById('checkout_parking_id').value;
+
+        if (!clientId || !parkingId) {
+            showMessage('Выберите клиента и парковку', 'error');
+            return;
+        }
+
+        const data = {
+            client_id: parseInt(clientId),
+            parking_id: parseInt(parkingId)
+        };
+
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Оформление...';
+        submitBtn.disabled = true;
+
+        try {
+            const result = await apiRequest('/api/client_parkings', 'DELETE', data);
+            const cost = result.data?.payment?.cost || 0;
+            showMessage(`✅ Выезд оформлен! Сумма к оплате: ${cost} руб.`, 'success');
+
+            // Очищаем форму
+            document.getElementById('checkout_client_id').value = '';
+            document.getElementById('checkout_parking_id').value = '';
+
+            // Обновляем данные
+            await loadActiveSessions();
+            await loadSelects();
+        } catch (error) {
+            console.error('Error:', error);
+            showMessage(error.message || 'Ошибка при выезде', 'error');
+        } finally {
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+
+    // Загружаем все данные при загрузке страницы
+    document.addEventListener('DOMContentLoaded', () => {
+        loadSelects();
+        loadActiveSessions();
+
+        // Обновляем активные сессии каждые 10 секунд
+        setInterval(loadActiveSessions, 10000);
+    });
+</script>
+{% endblock %}
